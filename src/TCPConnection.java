@@ -1,4 +1,7 @@
-import java.io.*;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.net.Socket;
 
 /**
@@ -6,34 +9,31 @@ import java.net.Socket;
  */
 public class TCPConnection extends Thread{
 
-    private static final int MAX_SIZE = 32;
-
-    private Socket download;
-    private int port;
-    private String path;
+    private Socket socket;
+    private boolean running;
 
     private OutputStream ostream;
     private ObjectOutputStream oostream;
 
     private InputStream istream;
     private ObjectInputStream oistream;
+    private  ServerP2p p2p;
 
-    private long downloaded;
-    private String filename;
 
-    public TCPConnection(Socket download, int port, String path){
-        this.download = download;
-        this.port = port;
-        this.path = path;
-        downloaded=0;
+    public TCPConnection(Socket socket, ServerP2p p2p){
+
+        this.socket = socket;
+        running=false;
+        this.p2p = p2p;
     }
 
-
-    public void setStop(){
-        try{
-            oostream.close();
-            oistream.close();
-            download.close();
+    public void sendTable(FilesTable ft){
+        try {
+            if(oostream!=null) {
+                oostream.reset();
+                oostream.writeObject(ft);
+                oostream.flush();
+            }
         }catch (Exception ex){
             ex.printStackTrace();
         }
@@ -41,80 +41,39 @@ public class TCPConnection extends Thread{
 
     public void run(){
 
-        try {
-            ostream = download.getOutputStream();
+        running = true;
+
+        try{
+
+            ostream = socket.getOutputStream();
             oostream = new ObjectOutputStream(ostream);
 
-            istream = download.getInputStream();
+            istream = socket.getInputStream();
             oistream = new ObjectInputStream(istream);
 
-            //System.out.println("Comunicacion establecida con cliente");
+            // receive table with files
+            PeerFileTable tmp = (PeerFileTable) oistream.readObject();
+            p2p.filesTable.add(tmp);
+            p2p.sendTableClients();
+            System.out.println("Peer envia lista de archivos");
 
+            // next call is to warning closing connection
+            tmp = (PeerFileTable) oistream.readObject();
+            //System.out.println(tmp.getId());
+            p2p.filesTable.remove(tmp.getId());
+            oostream.close();
+            oistream.close();
+            oostream = null;
+            p2p.sendTableClients();
+            System.out.println("Peer desconectado");
 
-            //receive current downloaded size
-            downloaded = ((Long)oistream.readObject()).longValue();
-            //System.out.println("Recibiendo ultima posicion de cliente...");
-
-            //receive nameFile
-            filename = (String) oistream.readObject();
-            path = path + "/"+filename;
-            //System.out.println("Recibiendo nombre de archivo...");
-
-            //calculate file size
-            DataInputStream in = new DataInputStream(new FileInputStream(path));
-            File f = new File(path);
-            long size = f.length();
-
-            //send size of file
-            oostream.reset();
-            oostream.writeObject(new Long(size));
-            oostream.flush();
-            //System.out.println("Enviando tamano de archivo...");
-
-            //go to the last position
-            in.skipBytes((int)downloaded);
-
-            byte[] buffer = new byte[MAX_SIZE];
-            //System.out.println("Iniciando envio de archivo..."+size);
-            try{
-                int len = 0;
-                while((len=in.read(buffer))!=-1){
-                    //send file
-                    ostream.write(buffer,0,len);
-                    //ostream.flush();
-                }
-            }catch (Exception ex){
-                ex.printStackTrace();
-            }
-
-        }catch (Exception ex){
+        }catch(Exception ex){
             ex.printStackTrace();
         }finally {
-            if(oistream!=null) {
-                try {
-                    oistream.close();
-                }catch (Exception e) { e.printStackTrace();}
-            }
-            if(istream!=null) {
-                try {
-                    istream.close();
-                }catch (Exception e) { e.printStackTrace();}
-            }
-            if(oostream!=null) {
-                try {
-                    oostream.close();
-                }catch (Exception e) { e.printStackTrace();}
-            }
-            if(ostream!=null) {
-                try {
-                    ostream.close();
-                }catch (Exception e) { e.printStackTrace();}
-            }
-            try {
-                download.close();
-            }catch (Exception ex) {ex.printStackTrace();}
+            try{
+                socket.close();
+            }catch (Exception e){ e.printStackTrace();}
         }
-
 
     }
 

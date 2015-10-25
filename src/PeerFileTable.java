@@ -1,4 +1,3 @@
-
 import java.io.Serializable;
 
 /**
@@ -14,12 +13,11 @@ public class PeerFileTable implements Serializable {
         this.files = files;
         this.ip = ip;
         this.port = port;
-        this.id = -1;
     }
 
     public String[] show(){
         /*for(int i=0;i<files.length;i++)
-            System.out.println(port+" - " +files[i]);
+            System.out.println(port+" - "+files[i]);
         */
         return files;
     }
